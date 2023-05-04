@@ -41,9 +41,6 @@ socket.onmessage = m => {
    handle_incoming[msg.method] ()
 }
 
-function new_state () {
-   
-}
 
 function midi_to_cps (n) {
    return 440 * (2 ** ((n - 69) / 12))
@@ -85,8 +82,9 @@ document.body.onclick = async () => {
    if (document.body.style.backgroundColor == `black`) {
 
       await audio_context.resume ()
+      osc.start ()
 
-      // document.body.style.backgroundColor = `deeppink`
+      document.body.style.backgroundColor = `deeppink`
       text_div.remove ()
       requestAnimationFrame (draw_frame)
 
@@ -99,17 +97,25 @@ document.body.onclick = async () => {
 }
 
 // ~ WEB AUDIO THINGS ~
-
 const audio_context = new AudioContext ()
 audio_context.suspend ()
+
+const osc = audio_context.createOscillator ()
+osc.frequency.value = 220
+
+const amp = audio_context.createGain ()
+amp.gain.value = 0
+
+osc.connect (amp).connect (audio_context.destination)
+
+function new_state () {}
+
 
 cnv.width = innerWidth
 cnv.height = innerHeight
 const ctx = cnv.getContext (`2d`)
 
 function draw_frame () {
-
-   
    if (state.is_playing) {
       ctx.fillStyle = `turquoise`
       ctx.fillRect (0, 0, cnv.width, cnv.height)
@@ -124,5 +130,16 @@ function draw_frame () {
       ctx.fillStyle = `deeppink`
       ctx.fillRect (0, 0, cnv.width, cnv.height)   
    }
+
+   const now = audio_context.currentTime
+   const f = 220 * (2 ** state.x)
+
+   osc.frequency.cancelScheduledValues (now)
+   osc.frequency.setValueAtTime (osc.frequency.value, now)
+   osc.frequency.exponentialRampToValueAtTime (f, now + 0.02)
+
+   const a = state.is_playing ? 1 - state.y : 0
+   amp.gain.linearRampToValueAtTime (a, now + 0.02)
+
    requestAnimationFrame (draw_frame)
 }

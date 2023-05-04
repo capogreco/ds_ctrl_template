@@ -157,7 +157,7 @@ const req_handler = async incoming_req => {
 
          // use the .method property of msg
          // to choose which method to call
-         console.log (msg)
+         // console.log (msg)
          manage_incoming[msg.method] ()
       }
 
