@@ -108,8 +108,18 @@ amp.gain.value = 0
 
 osc.connect (amp).connect (audio_context.destination)
 
-function new_state () {}
+function next_note () {
+   const now = audio_context.currentTime
+   const f = 220 * (2 ** state.x)
 
+   osc.frequency.cancelScheduledValues (now)
+   osc.frequency.setValueAtTime (osc.frequency.value, now)
+   osc.frequency.exponentialRampToValueAtTime (f, now + 0.02)
+
+   const a = state.is_playing ? 1 - state.y : 0
+   amp.gain.linearRampToValueAtTime (a, now + 0.02)
+
+}
 
 cnv.width = innerWidth
 cnv.height = innerHeight
@@ -124,22 +134,13 @@ function draw_frame () {
       const y = state.y * cnv.height - 50
       ctx.fillStyle = `deeppink`
       ctx.fillRect (x, y, 100, 100)
-   
+
    }
    else {
       ctx.fillStyle = `deeppink`
       ctx.fillRect (0, 0, cnv.width, cnv.height)   
    }
 
-   const now = audio_context.currentTime
-   const f = 220 * (2 ** state.x)
-
-   osc.frequency.cancelScheduledValues (now)
-   osc.frequency.setValueAtTime (osc.frequency.value, now)
-   osc.frequency.exponentialRampToValueAtTime (f, now + 0.02)
-
-   const a = state.is_playing ? 1 - state.y : 0
-   amp.gain.linearRampToValueAtTime (a, now + 0.02)
-
+   next_note ()
    requestAnimationFrame (draw_frame)
 }
