@@ -1,35 +1,69 @@
-import { serve } from "https://deno.land/std@0.157.0/http/server.ts"
-import { serveFile } from "https://deno.land/std@0.157.0/http/file_server.ts?s=serveFile"
-import * as uuid from "https://deno.land/std@0.119.0/uuid/mod.ts";
+import { serve }    from "https://deno.land/std@0.185.0/http/server.ts"
+import { serveDir } from "https://deno.land/std@0.185.0/http/file_server.ts"
+import { generate } from "https://deno.land/std@0.185.0/uuid/v1.ts"
 
+// map to manage sockets
 const sockets = new Map ()
-let control = null
-let is_playing = false
-let current_chord = []
-const state = {}
 
-const req_handler = async req => {
+// object to hold state
+const state = {
+   control: null,
+}
+
+// function to manage requests
+const req_handler = async incoming_req => {
+
+   let req = incoming_req
+
+   // get path from request
    const path = new URL (req.url).pathname
 
+   // get upgrade header
+   // or empty string
    const upgrade = req.headers.get ("upgrade") || ""
-   if (upgrade.toLowerCase () == "websocket") {
-      const { socket, response } = Deno.upgradeWebSocket (req)
-      const id = uuid.v1.generate ()
 
+   // if upgrade for websockets exists
+   if (upgrade.toLowerCase () == "websocket") {
+
+      // unwrap socket & response
+      // using upgradeWebSocket method
+      const { socket, response } = Deno.upgradeWebSocket (req)
+
+      // generate a unique ID
+      const id = generate ()
+
+      // defining an onopen method
       socket.onopen = () => {
-         socket.joined = false
+
+         // assign false to 
+         // audio_enabled property
+         socket.audio_enabled = false
+
+         // add socket to map
          sockets.set (id, socket)
-         const data = { 
-            'type' : `id`,
-            'body' : id,
+
+         // bundle the id into an object
+         const parcel = { 
+            'content' :  id,
+            'context' : `id`
          }
-         socket.send (JSON.stringify (data))
-         updateControl ()
+
+         // stringify & send the parcel
+         // to the client via the socket 
+         socket.send (JSON.stringify (parcel))
+
+         // call update_control function
+         update_control ()
       }
 
-      socket.onmessage = e => {
-         const obj = JSON.parse (e.data)
-         switch (obj.type) {
+      // defining an onmessage method
+      socket.onmessage = m => {
+
+         // unwrap the message
+         const message = JSON.parse (m.data)
+
+         
+         switch (message.context) {
             case 'state':
                Object.assign (state, obj)
                sockets.forEach (s => {
@@ -89,44 +123,45 @@ const req_handler = async req => {
       socket.onerror = e => console.log(`socket error: ${ e.message }`)
 
       socket.onclose = () => {
-         if (control) {
-            if (control.id == id) {
-               control = null
+         if (state.control) {
+            if (state.control.id == id) {
+               state.control = null
             }
          }
          else {
             sockets.delete (id)
-            updateControl ()
+            update_control ()
          }
       }
 
       return response
    }
-   
-   switch (path) {
-      case "/":
-         return serveFile (req, `synthesis/index.html`)
-      case "/synthesis.js":
-         return serveFile (req, `synthesis/synthesis.js`)
-      case "/reverb.js":
-         return serveFile (req, `synthesis/reverb.js`)
-      case "/R1NuclearReactorHall.m4a":
-         return serveFile (req, `synthesis/R1NuclearReactorHall.m4a`)
-      case "/favicon.ico":
-         return serveFile (req, `synthesis/favicon.ico`)
-      case "/control":
-         return serveFile (req, `control/index.html`)
-      case "/control/control.js":
-         return serveFile (req, `control/control.js`)
-      case "/control/favicon.ico":
-         return serveFile (req, `control/favicon.ico`)
-      }
+
+   if (req.url.endsWith (`/`)) {
+
+      // add 'index.html' to the url
+      req = new Request (`${ req.url }index.html`, req)
+   }
+
+   const options = {
+
+      // route requests to this
+      // directory in the file system
+      fsRoot: path.includes (`ctrl`) ? `` : `client`
+   }
+
+   console.log (path)
+
+   // return the requested asset
+   // from `public` folder
+   return serveDir (req, options)
+
 }
 
 serve (req_handler, { port: 80 })
 
-function updateControl () {
-   if (control) {
+function update_control () {
+   if (state.control) {
       const msg = {
          type: 'sockets',
          body: Array.from (sockets.entries ())
@@ -135,7 +170,7 @@ function updateControl () {
    }
 }
 
-function checkSockets () {
+function check_sockets () {
    const removals = []
    sockets.forEach ((val, key) => {
       if (val.readyState == 3) {
@@ -147,8 +182,9 @@ function checkSockets () {
       removals.forEach (id => {
          sockets.delete (id)
       })
+
       updateControl ()
    }
 }
 
-setInterval (checkSockets, 200)
+setInterval (check_sockets, 200)
