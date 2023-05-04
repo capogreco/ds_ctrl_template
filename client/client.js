@@ -2,41 +2,48 @@
 
 let id = null
 // const ws_address = `wss://capogreco-omni.deno.dev`
+
 const ws_address = `ws://localhost/`
 
 const socket = new WebSocket (ws_address)
 
 let init    = false
-const state = {}
 
-socket.addEventListener (`message`, msg => {
-   const obj = JSON.parse (msg.data)
+const state = {
+   x: 0.5,
+   y: 0.5,
+   is_playing: false
+}
+
+socket.onmessage = m => {
+   const msg = JSON.parse (m.data)
    const t = audio_context.currentTime
-   switch (obj.type) {
-      case 'id':
-         id = obj.body
-         console.log (`identity is ${ id }`)
-         const greeting = {
-            type: `greeting`,
-            body: `${ id } ~> hello!`
-         }
-         socket.send (JSON.stringify (greeting))      
-         break
-      case 'state':
 
-         if (JSON.stringify (obj) != JSON.stringify (state)) {
-            Object.assign (state, obj)
+   const handle_incoming = {
+
+      id: () => {
+         id = msg.content
+         console.log (`identity is ${ id }`)
+         socket.send (JSON.stringify ({
+            method: `greeting`,
+            content: `${ id } ~> hello!`
+         }))
+      },
+
+      upstate: () => {
+         if (JSON.stringify (msg.content) != JSON.stringify (state)) {
+            Object.assign (state, msg.content)
             new_state ()
          }
-
-         if (!init) {
-            init = true
-         }
-
-         break
+      }
    }
-})
 
+   handle_incoming[msg.method] ()
+}
+
+function new_state () {
+   
+}
 
 function midi_to_cps (n) {
    return 440 * (2 ** ((n - 69) / 12))
@@ -79,8 +86,9 @@ document.body.onclick = async () => {
 
       await audio_context.resume ()
 
-      document.body.style.backgroundColor = `deeppink`
+      // document.body.style.backgroundColor = `deeppink`
       text_div.remove ()
+      requestAnimationFrame (draw_frame)
 
       const msg = {
          method: 'join',
@@ -95,3 +103,26 @@ document.body.onclick = async () => {
 const audio_context = new AudioContext ()
 audio_context.suspend ()
 
+cnv.width = innerWidth
+cnv.height = innerHeight
+const ctx = cnv.getContext (`2d`)
+
+function draw_frame () {
+
+   
+   if (state.is_playing) {
+      ctx.fillStyle = `turquoise`
+      ctx.fillRect (0, 0, cnv.width, cnv.height)
+
+      const x = state.x * cnv.width - 50
+      const y = state.y * cnv.height - 50
+      ctx.fillStyle = `deeppink`
+      ctx.fillRect (x, y, 100, 100)
+   
+   }
+   else {
+      ctx.fillStyle = `deeppink`
+      ctx.fillRect (0, 0, cnv.width, cnv.height)   
+   }
+   requestAnimationFrame (draw_frame)
+}
